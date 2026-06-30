@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>外贸订单同比分析</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing: border-box; }
+:root {
+  --bg: #f0f4fb; --card: #ffffff; --primary: #4f6ef7;
+  --primary-light: #eef1fe; --accent: #667eea;
+  --text: #2c3345; --text-secondary: #6b7280;
+  --border: #e5e7eb; --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow: 0 4px 20px rgba(0,0,0,0.08); --radius: 12px;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.6;
+}
+.header {
+  background: linear-gradient(135deg, #667eea 0%, #5a6fe8 40%, #4f6ef7 100%);
+  padding: 28px 0 24px; text-align: center; color: #fff;
+}
+.header h1 { font-size: 24px; font-weight: 700; letter-spacing: 0.5px; }
+.header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+.container { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+
+/* Upload */
+.upload-section { margin-top: -18px; position: relative; z-index: 2; }
+.upload-card {
+  background: var(--card); border-radius: var(--radius);
+  padding: 36px 32px; box-shadow: var(--shadow); text-align: center;
+}
+.upload-icon { width: 52px; height: 52px; margin: 0 auto 14px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.upload-icon svg { width: 26px; height: 26px; color: var(--primary); }
+.upload-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 5px; }
+.upload-card .hint { font-size: 12px; color: var(--text-secondary); margin-bottom: 18px; }
+.upload-card input[type="file"] { display: none; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 22px; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: #3d5cf0; }
+.btn-outline { background: #fff; color: var(--primary); border: 1.5px solid var(--primary); }
+.btn-outline:hover { background: var(--primary-light); }
+.btn-sm { padding: 7px 16px; font-size: 12px; }
+
+/* File Bar */
+.file-bar {
+  display: none; align-items: center; justify-content: space-between;
+  background: var(--card); border-radius: 8px; padding: 12px 18px;
+  margin-top: 14px; box-shadow: var(--shadow-sm); border: 1px solid var(--border);
+}
+.file-bar.show { display: flex; }
+.file-info { display: flex; align-items: center; gap: 8px; }
+.file-icon { width: 32px; height: 32px; background: #ecfdf5; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #10b981; }
+.file-name { font-size: 13px; font-weight: 600; }
+.file-meta { font-size: 11px; color: var(--text-secondary); }
+
+/* Period Picker */
+.period-section { display: none; margin-top: 20px; }
+.period-section.show { display: block; }
+.period-grid {
+  background: var(--card); border-radius: var(--radius-sm);
+  padding: 18px 22px; box-shadow: var(--shadow-sm); border: 1px solid var(--border);
+}
+.period-row { display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap; }
+.period-col { flex: 1; min-width: 260px; }
+.period-label { font-size: 14px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.period-label .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.period-col:nth-child(1) .period-label .dot { background: #667eea; }
+.period-col:nth-child(2) .period-label .dot { background: #f6a609; }
+.period-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 180px; overflow-y: auto; padding: 4px 0; }
+.month-chip {
+  display: inline-flex; align-items: center; padding: 6px 12px;
+  border-radius: 18px; border: 1.5px solid var(--border);
+  background: #fff; cursor: pointer; font-size: 12px; font-weight: 500;
+  transition: all 0.15s; user-select: none; white-space: nowrap;
+}
+.month-chip:hover { border-color: var(--primary); }
+.month-chip.selected { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+.period-col:nth-child(2) .month-chip.selected { background: #fef6e7; border-color: #f6a609; color: #f6a609; }
+.year-label {
+  width: 100%;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  margin-bottom: 4px;
+  padding-bottom: 3px;
+  border-bottom: 1px dashed var(--border);
+}
+.period-col:nth-child(2) .year-label { color: #f6a609; }
+.period-actions {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.period-actions .info { font-size: 12px; color: var(--text-secondary); }
+
+/* Chart */
+.chart-section { display: none; margin-top: 20px; margin-bottom: 40px; }
+.chart-section.show { display: block; }
+.chart-card {
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); border: 1px solid var(--border); overflow: hidden;
+}
+.chart-header {
+  padding: 16px 22px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+.chart-header h3 { font-size: 15px; font-weight: 600; }
+.chart-badge { background: var(--primary-light); color: var(--primary); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+#chartContainer { width: 100%; height: 520px; }
+
+/* Detail Table */
+.detail-section { display: none; margin-top: 20px; margin-bottom: 40px; }
+.detail-section.show { display: block; }
+.detail-card {
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); border: 1px solid var(--border); overflow: hidden;
+}
+.detail-header {
+  padding: 14px 22px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.detail-header h3 { font-size: 14px; font-weight: 600; }
+.table-wrap { overflow-x: auto; padding: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 600px; }
+thead th {
+  background: #f9fafb; padding: 10px 14px; text-align: center;
+  font-weight: 700; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-secondary);
+  border-bottom: 2px solid var(--border); white-space: nowrap; position: sticky; top: 0;
+}
+tbody td { padding: 9px 14px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody tr:hover td { background: #f6f8fd; }
+th:first-child, td:first-child { text-align: left; padding-left: 18px; }
+.positive { color: #10b981; font-weight: 700; }
+.negative { color: #ef4444; font-weight: 700; }
+.zero-change { color: #9ca3af; }
+
+/* Spinner / Toast */
+.spinner-overlay {
+  display: none; position: fixed; top:0; left:0; right:0; bottom:0;
+  background: rgba(255,255,255,0.7); z-index: 100;
+  align-items: center; justify-content: center;
+}
+.spinner-overlay.show { display: flex; }
+.spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  background: #1f2937; color: #fff; padding: 10px 24px; border-radius: 8px;
+  font-size: 13px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>外贸订单同比分析</h1>
+  <p>上传订单数据，选择两个时间段，自动生成各物料分类订单数量对比簇状图</p>
+</div>
+
+<div class="container">
+  <div class="upload-section">
+    <div class="upload-card" id="uploadCard">
+      <div class="upload-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </div>
+      <h3>上传 Excel 订单数据</h3>
+      <p class="hint">支持 .xlsx / .xls，数据与「外贸订单透视分析」同源</p>
+      <label class="btn btn-primary" for="fileInput">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        选择文件
+      </label>
+      <input type="file" id="fileInput" accept=".xlsx,.xls">
+    </div>
+  </div>
+
+  <div class="file-bar" id="fileBar">
+    <div class="file-info">
+      <div class="file-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <div>
+        <div class="file-name" id="fileName">—</div>
+        <div class="file-meta" id="fileMeta">—</div>
+      </div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="document.getElementById('fileInput').click()">更换文件</button>
+  </div>
+
+  <div class="period-section" id="periodSection">
+    <div class="period-grid">
+      <div class="period-row">
+        <div class="period-col">
+          <div class="period-label"><span class="dot"></span> 时间段 A（基准期）</div>
+          <div class="period-chips" id="chipsA"></div>
+        </div>
+        <div class="period-col">
+          <div class="period-label"><span class="dot"></span> 时间段 B（对比期）</div>
+          <div class="period-chips" id="chipsB"></div>
+        </div>
+      </div>
+      <div class="period-actions">
+        <span class="info" id="periodInfo">请选择两个时间段</span>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-outline btn-sm" onclick="selectAllA()">全选A</button>
+          <button class="btn btn-outline btn-sm" onclick="clearAllA()">清空A</button>
+          <button class="btn btn-outline btn-sm" onclick="selectAllB()">全选B</button>
+          <button class="btn btn-outline btn-sm" onclick="clearAllB()">清空B</button>
+          <button class="btn btn-primary btn-sm" onclick="doGenerate()" style="margin-left:8px;">生成对比图</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-section" id="chartSection">
+    <div class="chart-card">
+      <div class="chart-header">
+        <h3 id="chartTitle">各物料分类订单数量对比</h3>
+        <span class="chart-badge" id="chartBadge">—</span>
+      </div>
+      <div id="chartContainer"></div>
+    </div>
+  </div>
+
+  <div class="detail-section" id="detailSection">
+    <div class="detail-card">
+      <div class="detail-header">
+        <h3>详细数据</h3>
+        <button class="btn btn-outline btn-sm" onclick="exportCSV()">导出 CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead id="detailHead"></thead>
+          <tbody id="detailBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="spinner-overlay" id="spinner"><div class="spinner"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================================================================
+   物料分类规则
+   ================================================================ */
+var KNOWN_CAT_ORDER = ['TDI', 'MDI', 'PMDI', '改性', 'PVC', '组合聚醚', '单体聚醚'];
+
+function classifyMaterial(desc) {
+  if (!desc) return '未知';
+  var d = String(desc).trim();
+  if (d === 'TDI') return 'TDI';
+  if (d === 'MDI' || d === 'MDI-50系列') return 'MDI';
+  if (d === 'PM') return 'PMDI';
+  if (d.indexOf('油墨') !== -1 || d.indexOf('粘合剂') !== -1 || d.indexOf('助剂') !== -1) return '改性';
+  if (d === '改性MDI') return '改性';
+  if (d === '聚氯乙烯') return 'PVC';
+  if (d.indexOf('板材干白料') !== -1 || d.indexOf('组合聚醚') !== -1 || d.indexOf('家电干白料') !== -1) return '组合聚醚';
+  var knownMonomer = ['CASE', 'POP', '天然脂肪醇醚', '小分子聚醚', '差异化聚醚', '普通软泡', '硬泡聚醚', '高回弹'];
+  if (knownMonomer.indexOf(d) !== -1) return '单体聚醚';
+  return d;
+}
+
+function sortedCats(catsSet) {
+  var result = [];
+  for (var i = 0; i < KNOWN_CAT_ORDER.length; i++) {
+    if (catsSet.has(KNOWN_CAT_ORDER[i])) result.push(KNOWN_CAT_ORDER[i]);
+  }
+  var dynamic = [];
+  var arr = [];
+  catsSet.forEach(function(c) { arr.push(c); });
+  arr.sort();
+  for (var j = 0; j < arr.length; j++) {
+    if (KNOWN_CAT_ORDER.indexOf(arr[j]) === -1) dynamic.push(arr[j]);
+  }
+  return result.concat(dynamic);
+}
+
+/* ================================================================
+   发货月份判定
+   ================================================================ */
+var TIME_PRIORITY = ['动态ETD', '订舱反馈ETD', '订舱要求ETD', '客户要求ETD', '客户要求ETA'];
+
+function parseDate(val) {
+  if (!val) return null;
+  if (typeof val === 'number') {
+    var d = new Date((val - 25569) * 86400 * 1000);
+    return d;
+  }
+  var s = String(val).trim();
+  if (!s) return null;
+  var parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) return parsed;
+  var m = s.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+  return null;
+}
+
+function determineShipMonth(rowObj) {
+  for (var i = 0; i < TIME_PRIORITY.length; i++) {
+    var tc = TIME_PRIORITY[i];
+    var val = rowObj[tc];
+    if (val === null || val === undefined || val === '') continue;
+    var d = parseDate(val);
+    if (!d || isNaN(d.getTime())) continue;
+    if (tc === '客户要求ETA') {
+      if (d.getDate() >= 15) {
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      } else {
+        var prev = new Date(d.getFullYear(), d.getMonth(), 0);
+        return prev.getFullYear() + '-' + String(prev.getMonth() + 1).padStart(2, '0');
+      }
+    } else {
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    }
+  }
+  return null;
+}
+
+/* ================================================================
+   全局数据
+   ================================================================ */
+var gData = [];       // processed data
+var gAllMonths = [];  // all months found
+var gSelectedA = {};   // object as Set (key->true)
+var gSelectedB = {};
+var gDetailData = [];  // for CSV export
+
+/* ================================================================
+   文件上传处理
+   ================================================================ */
+function handleFile(file) {
+  if (!file.name.match(/\.xlsx?$/i)) { showToast('请上传 .xlsx 或 .xls 格式的文件'); return; }
+  document.getElementById('spinner').classList.add('show');
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var bytes = new Uint8Array(e.target.result);
+      var wb = XLSX.read(bytes, { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+      if (rows.length < 2) {
+        showToast('文件数据不足');
+        document.getElementById('spinner').classList.remove('show');
+        return;
+      }
+
+      gData = processRows(rows);
+
+      document.getElementById('fileName').textContent = file.name;
+      document.getElementById('fileMeta').textContent = gData.length + ' 行数据 · ' + gAllMonths.length + ' 个月份';
+      document.getElementById('fileBar').classList.add('show');
+
+      buildPeriodPickers();
+      document.getElementById('periodSection').classList.add('show');
+      document.getElementById('chartSection').classList.remove('show');
+      document.getElementById('detailSection').classList.remove('show');
+
+      document.getElementById('spinner').classList.remove('show');
+      document.getElementById('periodSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+      console.error(err);
+      showToast('文件解析失败：' + err.message);
+      document.getElementById('spinner').classList.remove('show');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function processRows(rows) {
+  var headers = rows[0];
+  var headerMap = {};
+  for (var ci = 0; ci < headers.length; ci++) {
+    if (headers[ci]) headerMap[String(headers[ci]).trim()] = ci;
+  }
+
+  var descColKey = null;
+  var keys = Object.keys(headerMap);
+  for (var ki = 0; ki < keys.length; ki++) {
+    if (keys[ki].indexOf('物料组描述') !== -1) { descColKey = keys[ki]; break; }
+  }
+  var clientColIdx = headerMap['客户名称'];
+  var qtyColIdx = headerMap['订单数量'];
+
+  var result = [];
+  var monthsSetObj = {};
+
+  for (var ri = 1; ri < rows.length; ri++) {
+    var row = rows[ri];
+    var named = {};
+    var mapKeys = Object.keys(headerMap);
+    for (var mi = 0; mi < mapKeys.length; mi++) {
+      named[mapKeys[mi]] = row[headerMap[mapKeys[mi]]];
+    }
+
+    var desc = descColKey ? named[descColKey] : null;
+    var classification = classifyMaterial(desc);
+    var shipMonth = determineShipMonth(named);
+    if (shipMonth) monthsSetObj[shipMonth] = true;
+
+    var qty = 0;
+    if (qtyColIdx !== undefined && row[qtyColIdx] !== null && row[qtyColIdx] !== undefined) {
+      qty = parseFloat(row[qtyColIdx]) || 0;
+    }
+    var client = clientColIdx !== undefined ? String(row[clientColIdx] || '').trim() : '';
+
+    result.push({ client: client, classification: classification, shipMonth: shipMonth, qty: qty });
+  }
+
+  // sort months
+  gAllMonths = Object.keys(monthsSetObj).sort();
+  return result;
+}
+
+/* ================================================================
+   时间段选择器
+   ================================================================ */
+function buildPeriodPickers() {
+  // group by year
+  var byYear = {};
+  for (var mi = 0; mi < gAllMonths.length; mi++) {
+    var m = gAllMonths[mi];
+    var y = m.substring(0, 4);
+    if (!byYear[y]) byYear[y] = [];
+    byYear[y].push(m);
+  }
+  var years = Object.keys(byYear).sort();
+
+  var htmlA = '', htmlB = '';
+  for (var yi = 0; yi < years.length; yi++) {
+    var y = years[yi];
+    byYear[y].sort();
+    htmlA += '<div class="year-label">' + y + '年</div>';
+    htmlB += '<div class="year-label">' + y + '年</div>';
+    for (var mi2 = 0; mi2 < byYear[y].length; mi2++) {
+      var m2 = byYear[y][mi2];
+      var parts = m2.split('-');
+      var label = parts[0] + '年' + parseInt(parts[1]) + '月';
+      htmlA += '<div class="month-chip" data-month="' + m2 + '" onclick="toggleChipA(this, \'' + m2 + '\')">' + label + '</div>';
+      htmlB += '<div class="month-chip" data-month="' + m2 + '" onclick="toggleChipB(this, \'' + m2 + '\')">' + label + '</div>';
+    }
+  }
+
+  document.getElementById('chipsA').innerHTML = htmlA;
+  document.getElementById('chipsB').innerHTML = htmlB;
+  gSelectedA = {};
+  gSelectedB = {};
+  updatePeriodInfo();
+}
+
+function toggleChipA(el, month) {
+  if (gSelectedA[month]) {
+    delete gSelectedA[month];
+    el.classList.remove('selected');
+  } else {
+    gSelectedA[month] = true;
+    el.classList.add('selected');
+  }
+  updatePeriodInfo();
+}
+
+function toggleChipB(el, month) {
+  if (gSelectedB[month]) {
+    delete gSelectedB[month];
+    el.classList.remove('selected');
+  } else {
+    gSelectedB[month] = true;
+    el.classList.add('selected');
+  }
+  updatePeriodInfo();
+}
+
+function selectAllA() {
+  var chips = document.querySelectorAll('#chipsA .month-chip');
+  for (var i = 0; i < chips.length; i++) {
+    chips[i].classList.add('selected');
+    gSelectedA[chips[i].getAttribute('data-month')] = true;
+  }
+  updatePeriodInfo();
+  showToast('已全选时间段 A');
+}
+
+function clearAllA() {
+  var chips = document.querySelectorAll('#chipsA .month-chip');
+  for (var i = 0; i < chips.length; i++) {
+    chips[i].classList.remove('selected');
+  }
+  gSelectedA = {};
+  updatePeriodInfo();
+  showToast('已清空时间段 A');
+}
+
+function selectAllB() {
+  var chips = document.querySelectorAll('#chipsB .month-chip');
+  for (var i = 0; i < chips.length; i++) {
+    chips[i].classList.add('selected');
+    gSelectedB[chips[i].getAttribute('data-month')] = true;
+  }
+  updatePeriodInfo();
+  showToast('已全选时间段 B');
+}
+
+function clearAllB() {
+  var chips = document.querySelectorAll('#chipsB .month-chip');
+  for (var i = 0; i < chips.length; i++) {
+    chips[i].classList.remove('selected');
+  }
+  gSelectedB = {};
+  updatePeriodInfo();
+  showToast('已清空时间段 B');
+}
+
+function updatePeriodInfo() {
+  var aCount = 0, bCount = 0;
+  var aKeys = Object.keys(gSelectedA);
+  var bKeys = Object.keys(gSelectedB);
+  aCount = aKeys.length;
+  bCount = bKeys.length;
+  var msg = '';
+  if (aCount === 0 && bCount === 0) msg = '请选择两个时间段';
+  else if (aCount === 0) msg = '时间段A：未选 · 时间段B：' + bCount + ' 个月';
+  else if (bCount === 0) msg = '时间段A：' + aCount + ' 个月 · 时间段B：未选';
+  else msg = '时间段A：' + aCount + ' 个月 · 时间段B：' + bCount + ' 个月 · 点击「生成对比图」';
+  document.getElementById('periodInfo').innerHTML = msg;
+}
+
+/* ================================================================
+   生成对比图
+   ================================================================ */
+function doGenerate() {
+  var aKeys = Object.keys(gSelectedA);
+  var bKeys = Object.keys(gSelectedB);
+  if (aKeys.length === 0 || bKeys.length === 0) {
+    showToast('请同时选择时间段A和时间段B');
+    return;
+  }
+
+  document.getElementById('spinner').classList.add('show');
+
+  setTimeout(function() {
+    try {
+      renderChart();
+      document.getElementById('spinner').classList.remove('show');
+      document.getElementById('chartSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+      console.error(err);
+      showToast('生成图表失败：' + err.message);
+      document.getElementById('spinner').classList.remove('show');
+    }
+  }, 80);
+}
+
+function renderChart() {
+  var setA = {};
+  var aKeys = Object.keys(gSelectedA);
+  for (var i = 0; i < aKeys.length; i++) setA[aKeys[i]] = true;
+
+  var setB = {};
+  var bKeys = Object.keys(gSelectedB);
+  for (var j = 0; j < bKeys.length; j++) setB[bKeys[j]] = true;
+
+  // collect categories
+  var catsSet = {};
+  for (var di = 0; di < gData.length; di++) {
+    if (setA[gData[di].shipMonth] || setB[gData[di].shipMonth]) {
+      catsSet[gData[di].classification] = true;
+    }
+  }
+
+  var catsArr = [];
+  var ck = Object.keys(catsSet);
+  for (var ci = 0; ci < ck.length; ci++) catsArr.push(ck[ci]);
+  catsArr = sortedCats_catsSet(catsSet);
+
+  // compute quantities
+  var qtyA = {}, qtyB = {};
+  for (var ci2 = 0; ci2 < catsArr.length; ci2++) { qtyA[catsArr[ci2]] = 0; qtyB[catsArr[ci2]] = 0; }
+
+  for (var di2 = 0; di2 < gData.length; di2++) {
+    if (setA[gData[di2].shipMonth]) qtyA[gData[di2].classification] += gData[di2].qty;
+    if (setB[gData[di2].shipMonth]) qtyB[gData[di2].classification] += gData[di2].qty;
+  }
+
+  // change rates
+  var rates = [];
+  for (var ci3 = 0; ci3 < catsArr.length; ci3++) {
+    var c = catsArr[ci3];
+    var a = qtyA[c], b = qtyB[c];
+    if (a === 0 && b === 0) { rates.push(0); }
+    else if (a === 0) { rates.push(100); }
+    else { rates.push(Math.round(((b - a) / a * 100) * 10) / 10); }
+  }
+
+  var labelA = formatPeriodLabel(Object.keys(gSelectedA));
+  var labelB = formatPeriodLabel(Object.keys(gSelectedB));
+
+  // save detail
+  gDetailData = [];
+  for (var ci4 = 0; ci4 < catsArr.length; ci4++) {
+    gDetailData.push({
+      cat: catsArr[ci4],
+      qa: Math.round(qtyA[catsArr[ci4]] * 100) / 100,
+      qb: Math.round(qtyB[catsArr[ci4]] * 100) / 100,
+      rate: rates[ci4]
+    });
+  }
+
+  // === ECharts ===
+  var chartDom = document.getElementById('chartContainer');
+  if (window._myChart) { echarts.dispose(window._myChart); window._myChart = null; }
+  var myChart = echarts.init(chartDom, null, { renderer: 'canvas' });
+
+  var barDataA = [], barDataB = [];
+  for (var ci5 = 0; ci5 < catsArr.length; ci5++) {
+    barDataA.push(Math.round(qtyA[catsArr[ci5]] * 100) / 100);
+    barDataB.push(Math.round(qtyB[catsArr[ci5]] * 100) / 100);
+  }
+
+  var option = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: function(params) {
+        var s = '<b>' + params[0].name + '</b><br/>';
+        for (var pi = 0; pi < params.length; pi++) {
+          var p = params[pi];
+          if (p.seriesName === '同比变化率(%)') {
+            var col = p.value >= 0 ? '#10b981' : '#ef4444';
+            s += '<span style="color:' + col + '">●</span> ' + p.seriesName + '：<b>' + (p.value >= 0 ? '+' : '') + p.value + '%</b><br/>';
+          } else {
+            s += '<span style="color:' + p.color + '">●</span> ' + p.seriesName + '：<b>' + p.value.toFixed(2) + '</b><br/>';
+          }
+        }
+        return s;
+      }
+    },
+    legend: {
+      data: [labelA, labelB, '同比变化率(%)'],
+      top: 8,
+      textStyle: { fontSize: 12 }
+    },
+    grid: { left: '3%', right: '8%', bottom: '3%', top: 60, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: catsArr,
+      axisLabel: { fontSize: 11, interval: 0, rotate: catsArr.length > 8 ? 20 : 0 }
+    },
+    yAxis: [
+      { type: 'value', name: '订单数量', nameTextStyle: { fontSize: 11 }, axisLabel: { fontSize: 11 } },
+      { type: 'value', name: '同比变化率(%)', nameTextStyle: { fontSize: 11 }, axisLabel: { fontSize: 11, formatter: '{value}%' }, splitLine: { show: false } }
+    ],
+    series: [
+      {
+        name: labelA,
+        type: 'bar',
+        data: barDataA,
+        barWidth: catsArr.length > 10 ? '30%' : '40%',
+        itemStyle: { color: '#667eea', borderRadius: [4, 4, 0, 0] },
+        label: { show: true, position: 'top', fontSize: 10,
+          formatter: function(p) { return p.value > 0 ? p.value.toFixed(1) : ''; }
+        }
+      },
+      {
+        name: labelB,
+        type: 'bar',
+        data: barDataB,
+        barWidth: catsArr.length > 10 ? '30%' : '40%',
+        itemStyle: { color: '#f6a609', borderRadius: [4, 4, 0, 0] },
+        label: { show: true, position: 'top', fontSize: 10,
+          formatter: function(p) { return p.value > 0 ? p.value.toFixed(1) : ''; }
+        }
+      },
+      {
+        name: '同比变化率(%)',
+        type: 'line',
+        yAxisIndex: 1,
+        symbol: 'circle',
+        symbolSize: 10,
+        data: rates,
+        lineStyle: { color: '#ef4444', width: 2, type: 'dashed' },
+        itemStyle: { color: '#ef4444' },
+        label: {
+          show: true, position: 'top', fontSize: 10,
+          formatter: function(p) {
+            return (p.value >= 0 ? '+' : '') + p.value + '%';
+          },
+          color: '#ef4444'
+        }
+      }
+    ],
+    animationDuration: 600
+  };
+
+  myChart.setOption(option);
+  window._myChart = myChart;
+
+  window.addEventListener('resize', function() { if (window._myChart) window._myChart.resize(); });
+
+  document.getElementById('chartTitle').textContent = labelA + ' vs ' + labelB + '  各物料分类订单数量对比';
+  document.getElementById('chartBadge').textContent = catsArr.length + ' 个分类';
+  document.getElementById('chartSection').classList.add('show');
+
+  renderDetailTable(labelA, labelB);
+}
+
+function sortedCats_catsSet(catsSet) {
+  var result = [];
+  for (var i = 0; i < KNOWN_CAT_ORDER.length; i++) {
+    if (catsSet[KNOWN_CAT_ORDER[i]]) result.push(KNOWN_CAT_ORDER[i]);
+  }
+  var arr = [];
+  var keys = Object.keys(catsSet);
+  keys.sort();
+  for (var j = 0; j < keys.length; j++) {
+    if (KNOWN_CAT_ORDER.indexOf(keys[j]) === -1) arr.push(keys[j]);
+  }
+  return result.concat(arr);
+}
+
+function formatPeriodLabel(monthsArr) {
+  if (!monthsArr || monthsArr.length === 0) return '';
+  if (monthsArr.length === 1) return monthsArr[0];
+  monthsArr.sort();
+  var years = {};
+  for (var i = 0; i < monthsArr.length; i++) {
+    var y = monthsArr[i].substring(0, 4);
+    if (!years[y]) years[y] = [];
+    years[y].push(monthsArr[i].substring(5));
+  }
+  var parts = [];
+  var yrKeys = Object.keys(years).sort();
+  for (var yi = 0; yi < yrKeys.length; yi++) {
+    parts.push(yrKeys[yi] + '年(' + years[yrKeys[yi]].length + '个月)');
+  }
+  return parts.join(' & ');
+}
+
+/* ================================================================
+   明细表
+   ================================================================ */
+function renderDetailTable(labelA, labelB) {
+  var thead = document.getElementById('detailHead');
+  thead.innerHTML = '<tr><th>物料分类</th><th>' + labelA + '<br/>订单数量</th><th>' + labelB + '<br/>订单数量</th><th>同比变化率</th></tr>';
+
+  var tbody = document.getElementById('detailBody');
+  var html = '';
+  for (var i = 0; i < gDetailData.length; i++) {
+    var row = gDetailData[i];
+    var rate = row.rate;
+    var cls = 'zero-change';
+    var rateStr = '';
+    if (rate > 0) { cls = 'positive'; rateStr = '+' + rate + '%'; }
+    else if (rate < 0) { cls = 'negative'; rateStr = rate + '%'; }
+    else { rateStr = '0%'; }
+    html += '<tr>' +
+      '<td>' + escapeHtml(row.cat) + '</td>' +
+      '<td>' + row.qa.toFixed(2) + '</td>' +
+      '<td>' + row.qb.toFixed(2) + '</td>' +
+      '<td class="' + cls + '">' + rateStr + '</td>' +
+      '</tr>';
+  }
+  tbody.innerHTML = html;
+  document.getElementById('detailSection').classList.add('show');
+}
+
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/* ================================================================
+   CSV 导出
+   ================================================================ */
+function exportCSV() {
+  if (gDetailData.length === 0) { showToast('暂无数据可导出'); return; }
+  var BOM = '\uFEFF';
+  var header = '物料分类,时间段A订单数量,时间段B订单数量,同比变化率(%)\n';
+  var rows = '';
+  for (var i = 0; i < gDetailData.length; i++) {
+    rows += '"' + gDetailData[i].cat + '",' + gDetailData[i].qa + ',' + gDetailData[i].qb + ',' + gDetailData[i].rate + '\n';
+  }
+  var blob = new Blob([BOM + header + rows], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = '订单同比分析_' + formatPeriodLabel(Object.keys(gSelectedA)) + '_vs_' + formatPeriodLabel(Object.keys(gSelectedB)) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV 已导出');
+}
+
+/* ================================================================
+   Toast + 文件上传绑定
+   ================================================================ */
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 2500);
+}
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  if (e.target.files.length > 0) handleFile(e.target.files[0]);
+});
+
+(function() {
+  var card = document.getElementById('uploadCard');
+  card.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('dragover'); });
+  card.addEventListener('dragleave', function(e) { e.preventDefault(); this.classList.remove('dragover'); });
+  card.addEventListener('drop', function(e) {
+    e.preventDefault(); this.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+  });
+})();
+</script>
+</body>
+</html>
